@@ -4,10 +4,30 @@ from db import get_stats, get_recent
 
 def guardian_ui(user_message):
     if not user_message or not user_message.strip():
-        return "Please enter a message.", "", ""
+        return "Please enter a message.", "", "", ""
 
     try:
         result = run_agent(user_message)
+        analysis = result.get("analysis", {})
+
+        confidence = analysis.get("confidence")
+        sentiment = analysis.get("sentiment", "unknown")
+        intent = analysis.get("intent", "unknown")
+
+        analysis_lines = []
+        if intent:
+            analysis_lines.append(f"**Intent:** `{intent.upper()}`")
+        if confidence is not None:
+            bar_fill = min(confidence, 100) // 5
+            bar = "█" * bar_fill + "░" * (20 - bar_fill)
+            level = "Low" if confidence < 50 else "Medium" if confidence < 75 else "High"
+            analysis_lines.append(f"**Confidence:** {confidence}% `{bar}` ({level})")
+        if sentiment:
+            sentiment_icons = {"positive": "+", "negative": "-", "neutral": "~", "angry": "!", "frustrated": "!"}
+            icon = sentiment_icons.get(sentiment, "?")
+            analysis_lines.append(f"**Sentiment:** {sentiment} [{icon}]")
+
+        analysis_md = "\n\n".join(analysis_lines) if analysis_lines else ""
 
         summary = f"**Result:** {result['summary']}"
 
@@ -22,15 +42,17 @@ def guardian_ui(user_message):
             elif t["tool"] == "check_prompt_injection":
                 icon = "BLOCKED" if "BLOCKED" in str(t["result"]) else "Safe"
                 trace_lines.append(f"**Step {t['step']}** — `check_prompt_injection` → {icon}")
+            elif t["tool"] == "analyse_message":
+                trace_lines.append(f"**Step {t['step']}** — `analyse_message` → {str(t['result'])[:200]}")
             else:
                 trace_lines.append(f"**Step {t['step']}** — `{t['tool']}` → {str(t['result'])[:150]}")
 
         trace_md = "\n\n".join(trace_lines) if trace_lines else "No steps recorded."
 
-        return summary, visitor_reply, trace_md
+        return analysis_md, summary, visitor_reply, trace_md
 
     except Exception as e:
-        return f"Error: {str(e)}", "", ""
+        return f"Error: {str(e)}", "", "", ""
 
 def load_dashboard():
     stats = get_stats()
@@ -77,6 +99,7 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
                 lines=3
             )
             analyze_button = gr.Button("Analyse Message", variant="primary")
+            analysis_box = gr.Markdown(label="Analysis")
             summary_box = gr.Markdown(label="Result")
             reply_box = gr.Markdown(label="Visitor Reply")
             trace_box = gr.Markdown(label="Agent Reasoning Trace")
@@ -84,7 +107,7 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
             analyze_button.click(
                 fn=guardian_ui,
                 inputs=input_box,
-                outputs=[summary_box, reply_box, trace_box]
+                outputs=[analysis_box, summary_box, reply_box, trace_box]
             )
 
         with gr.TabItem("Dashboard"):
