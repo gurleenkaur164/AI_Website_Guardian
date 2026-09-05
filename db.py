@@ -58,4 +58,20 @@ def get_recent(intent=None, limit=10):
     conn.close()
     return [dict(r) for r in rows]
 
+def get_stats():
+    conn = get_connection()
+    intent_counts = conn.execute(
+        "SELECT intent, COUNT(*) as count FROM messages GROUP BY intent ORDER BY count DESC"
+    ).fetchall()
+    severity_counts = conn.execute(
+        "SELECT severity, COUNT(*) as count FROM messages GROUP BY severity ORDER BY count DESC"
+    ).fetchall()
+    total = conn.execute("SELECT COUNT(*) as count FROM messages").fetchone()["count"]
+    conn.close()
+    return {
+        "total": total,
+        "by_intent": {r["intent"]: r["count"] for r in intent_counts},
+        "by_severity": {r["severity"]: r["count"] for r in severity_counts},
+    }
+
 init_db()
