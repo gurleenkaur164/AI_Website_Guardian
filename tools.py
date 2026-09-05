@@ -1,27 +1,42 @@
-from tool_schemas import ToolResult
-from datetime import datetime
+from db import save_message, search_similar
 
-DATA_DIR= "data"
+def log_spam(message, severity="low"):
+    save_message("spam", message, severity=severity, action_taken="Logged as spam")
+    return f"Spam message logged with severity={severity}."
 
-def save_to_file(filename: str, message:str)-> ToolResult:
-    path = f"{DATA_DIR}/{filename}"
-    timestamp = datetime.now().isoformat()
+def log_bug(message, severity="low"):
+    save_message("bug", message, severity=severity, action_taken="Logged as bug report")
+    return f"Bug report logged with severity={severity}."
 
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(f"[{timestamp}] {message}\n")
+def log_suggestion(message, severity="low"):
+    save_message("suggestion", message, severity=severity, action_taken="Logged as suggestion")
+    return f"Suggestion logged with severity={severity}."
 
-    return ToolResult(
-        status="success",
-        detail=f"Saved to {filename}"
-    )
-def handle_spam(message:str)->ToolResult:
-    return save_to_file("spam.txt", message)
+def notify_admin(reason, message):
+    save_message("abuse", message, severity="critical", action_taken=f"Admin notified: {reason}")
+    return f"Admin alerted. Reason: {reason}"
 
-def handle_bug(message:str)->ToolResult:
-    return save_to_file("bugs.txt", message)
+def search_duplicates(keyword):
+    results = search_similar(keyword)
+    if not results:
+        return "No similar past messages found."
+    lines = [f"- [{r['intent']}] {r['original_message'][:80]}..." for r in results]
+    return f"Found {len(results)} similar message(s):\n" + "\n".join(lines)
 
-def handle_suggestion(message:str)->ToolResult:
-    return save_to_file("suggestions.txt", message)
+def done(summary):
+    return summary
 
-def handle_unknown(message:str)->ToolResult:
-    return save_to_file("unknown.txt", message)  
+TOOL_REGISTRY = {
+    "log_spam": log_spam,
+    "log_bug": log_bug,
+    "log_suggestion": log_suggestion,
+    "notify_admin": notify_admin,
+    "search_duplicates": search_duplicates,
+    "done": done,
+}
+
+def execute_tool(name, arguments):
+    func = TOOL_REGISTRY.get(name)
+    if not func:
+        return f"Unknown tool: {name}"
+    return func(**arguments)

@@ -1,35 +1,32 @@
 import gradio as gr
-from main import decide_intent, act
+from main import run_agent
 
 def guardian_ui(user_message):
     if not user_message or not user_message.strip():
-        return " Please enter a message."
+        return "Please enter a message.", ""
 
     try:
-        intent = decide_intent(user_message)
-        result = act(intent, user_message)
+        result = run_agent(user_message)
 
-        
-        if isinstance(result, dict):
-            action = result.get("detail", str(result))
-        else:
-            action = str(result)
+        summary = f"**Result:** {result['summary']}"
 
-        return f"""
- Analysis Result
+        trace_lines = []
+        for t in result["trace"]:
+            if t["tool"] == "thinking":
+                trace_lines.append(f"**Step {t['step']}** — Reasoning:\n> {t['result'][:200]}")
+            else:
+                trace_lines.append(f"**Step {t['step']}** — `{t['tool']}` → {t['result']}")
 
-**Detected Intent:** `{intent.upper()}`  
+        trace_md = "\n\n".join(trace_lines) if trace_lines else "No steps recorded."
 
-**Action Taken:**  
-{action}
-"""
+        return summary, trace_md
 
     except Exception as e:
-        return f" Error occurred:\n```\n{str(e)}\n```"
+        return f"Error: {str(e)}", ""
 
 with gr.Blocks(theme=gr.themes.Soft()) as demo:
-    gr.Markdown(" AI Website Guardian")
-    gr.Markdown("Agentic AI Agent powered by Ollama")
+    gr.Markdown("# AI Website Guardian")
+    gr.Markdown("Agentic AI system with tool calling, multi-step reasoning, and SQLite storage")
 
     input_box = gr.Textbox(
         label="Website Visitor Message",
@@ -37,13 +34,15 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
         lines=3
     )
 
-    output_box = gr.Markdown()
-
     analyze_button = gr.Button("Analyse Message")
+
+    summary_box = gr.Markdown(label="Result")
+    trace_box = gr.Markdown(label="Agent Reasoning Trace")
+
     analyze_button.click(
         fn=guardian_ui,
         inputs=input_box,
-        outputs=output_box
+        outputs=[summary_box, trace_box]
     )
 
 demo.launch()

@@ -1,4 +1,4 @@
-def notify_admin(intent:str, message:str):
+def notify_admin(reason, message):
     print("ADMIN ALERT")
-    print("Intent:", intent)
+    print("Reason:", reason)
     print("Message:", message)
