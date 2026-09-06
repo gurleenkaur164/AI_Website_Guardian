@@ -1,6 +1,8 @@
 import re
+import json
 from db import save_message, search_similar
 from ollama_client import chat
+from config import get_threshold, get_config
 
 INJECTION_PATTERNS = [
     r"ignore\s+(all\s+)?(previous|above|prior)\s+(instructions|prompts|rules)",
@@ -32,15 +34,32 @@ def check_prompt_injection(message):
 
 def analyse_message(message):
     response = chat([
-        {"role": "system", "content": """You are a message analysis engine. Analyse the given message and return EXACTLY this format, nothing else:
-
-Intent: <spam|bug|suggestion|abuse|unknown>
-Confidence: <0-100>
-Sentiment: <positive|negative|neutral|angry|frustrated>
-Reasoning: <one sentence explaining your classification>"""},
+        {"role": "system", "content": 'You are a message analysis engine. Return a JSON object with exactly these keys: "intent" (one of: spam, bug, suggestion, abuse, unknown), "confidence" (integer 0-100), "sentiment" (one of: positive, negative, neutral, angry, frustrated), "reasoning" (one sentence). Return ONLY valid JSON, no other text.'},
         {"role": "user", "content": message},
-    ])
-    return response.get("content", "Intent: unknown\nConfidence: 0\nSentiment: neutral\nReasoning: Analysis failed.")
+    ], json_mode=True)
+
+    raw = response.get("content", "{}")
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        data = {"intent": "unknown", "confidence": 0, "sentiment": "neutral", "reasoning": "Analysis failed to produce valid JSON."}
+
+    data.setdefault("intent", "unknown")
+    data.setdefault("confidence", 0)
+    data.setdefault("sentiment", "neutral")
+    data.setdefault("reasoning", "")
+
+    intent = data["intent"]
+    confidence = data["confidence"]
+    threshold = get_threshold(intent)
+    config = get_config()
+    escalate = data["sentiment"] in config["severity_escalation_sentiments"]
+
+    data["threshold"] = threshold
+    data["above_threshold"] = confidence >= threshold
+    data["severity_escalated"] = escalate
+
+    return json.dumps(data)
 
 def log_spam(message, severity="low"):
     save_message("spam", message, severity=severity, action_taken="Logged as spam")

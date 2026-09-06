@@ -4,3 +4,5 @@ __pycache__/
 .env
 .venv/
 *.db
+eval_report.json
+guardian_config.json

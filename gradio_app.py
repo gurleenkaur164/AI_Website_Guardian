@@ -20,8 +20,14 @@ def guardian_ui(user_message):
         if confidence is not None:
             bar_fill = min(confidence, 100) // 5
             bar = "█" * bar_fill + "░" * (20 - bar_fill)
-            level = "Low" if confidence < 50 else "Medium" if confidence < 75 else "High"
-            analysis_lines.append(f"**Confidence:** {confidence}% `{bar}` ({level})")
+            threshold = analysis.get("threshold")
+            above = analysis.get("above_threshold")
+            status = "Above threshold" if above else "Below threshold — logged as unknown"
+            threshold_str = f" (threshold: {threshold}%, {status})" if threshold is not None else ""
+            analysis_lines.append(f"**Confidence:** {confidence}% `{bar}`{threshold_str}")
+        reasoning = analysis.get("reasoning", "")
+        if reasoning:
+            analysis_lines.append(f"**Reasoning:** {reasoning}")
         if sentiment:
             sentiment_icons = {"positive": "+", "negative": "-", "neutral": "~", "angry": "!", "frustrated": "!"}
             icon = sentiment_icons.get(sentiment, "?")
